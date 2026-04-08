@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo, FormEvent } from 'react';
+import React, { useState, useEffect, useMemo, FormEvent, ErrorInfo, ReactNode } from 'react';
 import { 
   PlusCircle, 
   TrendingUp, 
@@ -23,7 +23,9 @@ import {
   Mail,
   Linkedin,
   Github,
-  Instagram
+  Instagram,
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -41,34 +43,86 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, Goal, TransactionType, Currency, Contribution } from './types';
 import { cn, formatCurrency } from './lib/utils';
 
-export default function App() {
-  // State
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('finanzas_transactions');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [goals, setGoals] = useState<Goal[]>(() => {
-    const saved = localStorage.getItem('finanzas_goals');
-    if (!saved) return [];
-    try {
-      const parsed = JSON.parse(saved);
-      return parsed.map((g: any) => ({
-        ...g,
-        contributions: Array.isArray(g.contributions) ? g.contributions : [],
-        createdAt: g.createdAt || new Date().toISOString()
-      }));
-    } catch (e) {
-      return [];
+// Firebase Imports
+import { auth, db, googleProvider } from './firebase';
+import { 
+  onAuthStateChanged, 
+  signInWithPopup, 
+  signOut, 
+  User 
+} from 'firebase/auth';
+import { 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  deleteDoc, 
+  doc, 
+  setDoc, 
+  query, 
+  orderBy,
+  getDoc,
+  getDocFromServer
+} from 'firebase/firestore';
+
+// Error Boundary Component
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-4">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+              <X size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">Algo salió mal</h2>
+            <p className="text-slate-500">Hubo un error al cargar tus datos. Por favor, intenta recargar la página.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all"
+            >
+              Recargar Aplicación
+            </button>
+          </div>
+        </div>
+      );
     }
+    return (this as any).props.children;
+  }
+}
+
+function Dashboard() {
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // Data State
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [categories, setCategories] = useState<Record<TransactionType, string[]>>({
+    income: ['Sueldo', 'Venta', 'Inversión', 'Regalo', 'Otros'],
+    expense: ['Comida', 'Transporte', 'Vivienda', 'Entretenimiento', 'Salud', 'Educación', 'Otros']
   });
-  const [categories, setCategories] = useState<Record<TransactionType, string[]>>(() => {
-    const saved = localStorage.getItem('finanzas_categories');
-    return saved ? JSON.parse(saved) : {
-      income: ['Sueldo', 'Venta', 'Inversión', 'Regalo', 'Otros'],
-      expense: ['Comida', 'Transporte', 'Vivienda', 'Entretenimiento', 'Salud', 'Educación', 'Otros']
-    };
-  });
-  const [selectedCurrency, setSelectedCurrency] = useState(() => localStorage.getItem('finanzas_currency') || 'COP');
+  const [selectedCurrency, setSelectedCurrency] = useState('COP');
+  
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [viewMode, setViewMode] = useState<'general' | 'monthly'>('general');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -95,33 +149,105 @@ export default function App() {
   const [newCatName, setNewCatName] = useState('');
   const [newCatType, setNewCatType] = useState<TransactionType>('expense');
 
-  // Fetch Currencies
+  // Auth Listener
   useEffect(() => {
-    fetch('https://api.frankfurter.app/currencies')
-      .then(res => res.json())
-      .then(data => {
-        const list = Object.entries(data).map(([code, name]) => ({ code, name: name as string }));
-        setCurrencies(list);
-      })
-      .catch(err => console.error('Error fetching currencies:', err));
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setIsAuthReady(true);
+    });
+
+    // Connection Test
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error: any) {
+        if (error.message?.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client is offline.");
+        }
+      }
+    };
+    testConnection();
+
+    return () => unsubscribe();
   }, []);
 
-  // Persistence
+  // Firestore Listeners
   useEffect(() => {
-    localStorage.setItem('finanzas_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+    if (!user) {
+      setTransactions([]);
+      setGoals([]);
+      return;
+    }
 
-  useEffect(() => {
-    localStorage.setItem('finanzas_goals', JSON.stringify(goals));
-  }, [goals]);
+    // Transactions Listener
+    const qTransactions = query(
+      collection(db, 'users', user.uid, 'transactions'),
+      orderBy('date', 'desc')
+    );
+    const unsubTransactions = onSnapshot(qTransactions, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      setTransactions(list);
+    }, (error) => handleFirestoreError(error, 'list', `users/${user.uid}/transactions`));
 
-  useEffect(() => {
-    localStorage.setItem('finanzas_categories', JSON.stringify(categories));
-  }, [categories]);
+    // Goals Listener
+    const qGoals = collection(db, 'users', user.uid, 'goals');
+    const unsubGoals = onSnapshot(qGoals, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        contributions: (doc.data() as any).contributions || []
+      } as Goal));
+      setGoals(list);
+    }, (error) => handleFirestoreError(error, 'list', `users/${user.uid}/goals`));
 
-  useEffect(() => {
-    localStorage.setItem('finanzas_currency', selectedCurrency);
-  }, [selectedCurrency]);
+    // Settings Listener
+    const docSettings = doc(db, 'users', user.uid, 'settings', 'main');
+    const unsubSettings = onSnapshot(docSettings, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.categories) setCategories(data.categories);
+        if (data.currency) setSelectedCurrency(data.currency);
+      }
+    }, (error) => handleFirestoreError(error, 'get', `users/${user.uid}/settings/main`));
+
+    return () => {
+      unsubTransactions();
+      unsubGoals();
+      unsubSettings();
+    };
+  }, [user]);
+
+  // Error Handler
+  const handleFirestoreError = (error: any, operationType: string, path: string) => {
+    const errInfo = {
+      error: error.message,
+      operationType,
+      path,
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified
+      }
+    };
+    console.error('Firestore Error:', JSON.stringify(errInfo));
+  };
+
+  // Auth Handlers
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error('Login Error:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout Error:', error);
+    }
+  };
 
   // Filtering
   const filteredTransactions = useMemo(() => {
@@ -160,12 +286,11 @@ export default function App() {
   }, [filteredTransactions]);
 
   // Handlers
-  const handleAddTransaction = (e: FormEvent) => {
+  const handleAddTransaction = async (e: FormEvent) => {
     e.preventDefault();
-    if (!desc || !amount || !category) return;
+    if (!user || !desc || !amount || !category) return;
 
-    const newTransaction: Transaction = {
-      id: crypto.randomUUID(),
+    const newTransaction = {
       description: desc,
       amount: parseFloat(amount),
       type,
@@ -173,36 +298,43 @@ export default function App() {
       date: date
     };
 
-    setTransactions([newTransaction, ...transactions]);
-    setDesc('');
-    setAmount('');
-    setDate(new Date().toISOString().slice(0, 10));
-    setShowAddModal(false);
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'transactions'), newTransaction);
+      setDesc('');
+      setAmount('');
+      setDate(new Date().toISOString().slice(0, 10));
+      setShowAddModal(false);
+    } catch (error) {
+      handleFirestoreError(error, 'create', `users/${user.uid}/transactions`);
+    }
   };
 
-  const handleAddGoal = (e: FormEvent) => {
+  const handleAddGoal = async (e: FormEvent) => {
     e.preventDefault();
-    if (!goalName || !goalTarget) return;
+    if (!user || !goalName || !goalTarget) return;
 
-    const newGoal: Goal = {
-      id: crypto.randomUUID(),
+    const newGoal = {
       name: goalName,
       targetAmount: parseFloat(goalTarget),
       contributions: [],
-      deadline: goalDeadline || undefined,
+      deadline: goalDeadline || null,
       createdAt: new Date().toISOString()
     };
 
-    setGoals([...goals, newGoal]);
-    setGoalName('');
-    setGoalTarget('');
-    setGoalDeadline('');
-    setShowGoalModal(false);
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'goals'), newGoal);
+      setGoalName('');
+      setGoalTarget('');
+      setGoalDeadline('');
+      setShowGoalModal(false);
+    } catch (error) {
+      handleFirestoreError(error, 'create', `users/${user.uid}/goals`);
+    }
   };
 
-  const handleAddContribution = (e: FormEvent) => {
+  const handleAddContribution = async (e: FormEvent) => {
     e.preventDefault();
-    if (!showContributionModal || !contributionAmount) return;
+    if (!user || !showContributionModal || !contributionAmount) return;
 
     const amount = parseFloat(contributionAmount);
     if (amount > totals.balance) {
@@ -210,63 +342,149 @@ export default function App() {
       return;
     }
 
+    const goal = goals.find(g => g.id === showContributionModal);
+    if (!goal) return;
+
     const newContribution: Contribution = {
       id: crypto.randomUUID(),
       amount: amount,
       date: contributionDate
     };
 
-    setGoals(goals.map(g => {
-      if (g.id === showContributionModal) {
-        return { ...g, contributions: [...(g.contributions || []), newContribution] };
-      }
-      return g;
-    }));
+    try {
+      // Update Goal
+      const goalRef = doc(db, 'users', user.uid, 'goals', goal.id);
+      await setDoc(goalRef, {
+        ...goal,
+        contributions: [...(goal.contributions || []), newContribution]
+      });
 
-    // Also add a transaction to reflect the "expense" of saving
-    const savingTransaction: Transaction = {
-      id: crypto.randomUUID(),
-      description: `Ahorro: ${goals.find(g => g.id === showContributionModal)?.name}`,
-      amount: amount,
-      type: 'expense',
-      category: 'Ahorro',
-      date: contributionDate
-    };
-    setTransactions([savingTransaction, ...transactions]);
+      // Add Transaction
+      const savingTransaction = {
+        description: `Ahorro: ${goal.name}`,
+        amount: amount,
+        type: 'expense',
+        category: 'Ahorro',
+        date: contributionDate
+      };
+      await addDoc(collection(db, 'users', user.uid, 'transactions'), savingTransaction);
 
-    setContributionAmount('');
-    setContributionDate(new Date().toISOString().slice(0, 10));
-    setShowContributionModal(null);
+      setContributionAmount('');
+      setContributionDate(new Date().toISOString().slice(0, 10));
+      setShowContributionModal(null);
+    } catch (error) {
+      handleFirestoreError(error, 'write', `users/${user.uid}/goals/${goal.id}`);
+    }
   };
 
-  const handleAddCategory = (e: FormEvent) => {
+  const handleAddCategory = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newCatName) return;
+    if (!user || !newCatName) return;
     if (categories[newCatType].includes(newCatName)) return;
 
-    setCategories({
+    const updatedCategories = {
       ...categories,
       [newCatType]: [...categories[newCatType], newCatName]
-    });
-    setNewCatName('');
+    };
+
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'settings', 'main'), {
+        categories: updatedCategories,
+        currency: selectedCurrency
+      }, { merge: true });
+      setNewCatName('');
+    } catch (error) {
+      handleFirestoreError(error, 'write', `users/${user.uid}/settings/main`);
+    }
   };
 
-  const deleteCategory = (type: TransactionType, cat: string) => {
-    setCategories({
+  const deleteCategory = async (type: TransactionType, cat: string) => {
+    if (!user) return;
+    const updatedCategories = {
       ...categories,
       [type]: categories[type].filter(c => c !== cat)
-    });
+    };
+
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'settings', 'main'), {
+        categories: updatedCategories
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, 'write', `users/${user.uid}/settings/main`);
+    }
   };
 
-  const deleteTransaction = (id: string) => {
-    setTransactions(transactions.filter(t => t.id !== id));
+  const deleteTransaction = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'transactions', id));
+    } catch (error) {
+      handleFirestoreError(error, 'delete', `users/${user.uid}/transactions/${id}`);
+    }
   };
 
-  const deleteGoal = (id: string) => {
-    setGoals(goals.filter(g => g.id !== id));
+  const deleteGoal = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'goals', id));
+    } catch (error) {
+      handleFirestoreError(error, 'delete', `users/${user.uid}/goals/${id}`);
+    }
+  };
+
+  const updateCurrency = async (currency: string) => {
+    if (!user) return;
+    setSelectedCurrency(currency);
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'settings', 'main'), {
+        currency
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, 'write', `users/${user.uid}/settings/main`);
+    }
   };
 
   const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e', '#64748b'];
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100 max-w-md w-full text-center space-y-8"
+        >
+          <div className="space-y-4">
+            <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-slate-900/20">
+              <Wallet size={40} className="text-white" />
+            </div>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">Finanzas Pro</h1>
+            <p className="text-slate-500 text-lg">Toma el control total de tu dinero en cualquier dispositivo.</p>
+          </div>
+
+          <button 
+            onClick={handleLogin}
+            className="w-full flex items-center justify-center gap-4 bg-white border-2 border-slate-100 py-4 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-200 transition-all shadow-sm active:scale-[0.98]"
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+            Continuar con Google
+          </button>
+
+          <p className="text-xs text-slate-400">
+            Al continuar, aceptas que tus datos financieros se guarden de forma segura en la nube.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans p-4 md:p-8">
@@ -276,9 +494,16 @@ export default function App() {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Finanzas Pro</h1>
-            <p className="text-slate-500">Gestiona tu dinero con inteligencia</p>
+            <p className="text-slate-500">Hola, {user.displayName?.split(' ')[0] || 'Usuario'}</p>
           </div>
           <div className="flex gap-3">
+            <button 
+              onClick={handleLogout}
+              className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all shadow-sm active:scale-95"
+              title="Cerrar Sesión"
+            >
+              <LogOut size={20} />
+            </button>
             <button 
               onClick={() => setShowSettings(true)}
               className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95"
@@ -340,7 +565,15 @@ export default function App() {
 
           <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
             <Coins size={18} className="text-slate-400" />
-            <span>Moneda: {selectedCurrency}</span>
+            <select 
+              value={selectedCurrency}
+              onChange={(e) => updateCurrency(e.target.value)}
+              className="bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-700 cursor-pointer p-0"
+            >
+              {currencies.map(c => (
+                <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -1022,5 +1255,13 @@ export default function App() {
       </AnimatePresence>
 
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <Dashboard />
+    </ErrorBoundary>
   );
 }

@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction (income or expense)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["id", "description", "amount", "type", "category", "date"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "A savings goal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "targetAmount": { "type": "number" },
+        "contributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "amount": { "type": "number" },
+              "date": { "type": "string", "format": "date" }
+            }
+          }
+        },
+        "deadline": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date" }
+      },
+      "required": ["id", "name", "targetAmount", "contributions", "createdAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User specific settings like currency and categories",
+      "type": "object",
+      "properties": {
+        "currency": { "type": "string" },
+        "categories": {
+          "type": "object",
+          "properties": {
+            "income": { "type": "array", "items": { "type": "string" } },
+            "expense": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User's financial transactions"
+    },
+    "/users/{userId}/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "User's savings goals"
+    },
+    "/users/{userId}/settings/main": {
+      "schema": "UserSettings",
+      "description": "User's application settings"
+    }
+  }
+}

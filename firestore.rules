@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}/transactions/{transactionId}
+    // Fields:
+    //   - id: string
+    //   - description: string (1-100 chars)
+    //   - amount: number (positive)
+    //   - type: string ('income' | 'expense')
+    //   - category: string (1-50 chars)
+    //   - date: string (ISO 8601 format)
+    //
+    // Collection: /users/{userId}/goals/{goalId}
+    // Fields:
+    //   - id: string
+    //   - name: string (1-100 chars)
+    //   - targetAmount: number (positive)
+    //   - contributions: list of maps {id, amount, date}
+    //   - deadline: string (optional, ISO 8601)
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: /users/{userId}/settings/main
+    // Fields:
+    //   - currency: string (3 chars)
+    //   - categories: map {income: list, expense: list}
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['id', 'description', 'amount', 'type', 'category', 'date']) &&
+             data.keys().hasOnly(['id', 'description', 'amount', 'type', 'category', 'date']) &&
+             isValidString(data.id, 1, 100) &&
+             isValidString(data.description, 1, 100) &&
+             data.amount is number &&
+             data.type in ['income', 'expense'] &&
+             isValidString(data.category, 1, 50) &&
+             isValidDateString(data.date);
+    }
+
+    function isValidGoal(data) {
+      return data.keys().hasAll(['id', 'name', 'targetAmount', 'contributions', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'name', 'targetAmount', 'contributions', 'deadline', 'createdAt']) &&
+             isValidString(data.id, 1, 100) &&
+             isValidString(data.name, 1, 100) &&
+             data.targetAmount is number && data.targetAmount > 0 &&
+             data.contributions is list &&
+             isValidDateString(data.createdAt) &&
+             (!('deadline' in data) || isValidDateString(data.deadline));
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasOnly(['currency', 'categories']) &&
+             (!('currency' in data) || isValidString(data.currency, 1, 10)) &&
+             (!('categories' in data) || (data.categories is map));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow update: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /goals/{goalId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidGoal(request.resource.data);
+        allow update: if isOwner(userId) && isValidGoal(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /settings/{settingId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSettings(request.resource.data);
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
