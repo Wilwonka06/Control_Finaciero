@@ -123,7 +123,15 @@ function Dashboard() {
   });
   const [selectedCurrency, setSelectedCurrency] = useState('COP');
   
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([
+    { code: 'COP', name: 'Peso Colombiano' },
+    { code: 'USD', name: 'Dólar Estadounidense' },
+    { code: 'EUR', name: 'Euro' },
+    { code: 'MXN', name: 'Peso Mexicano' },
+    { code: 'ARS', name: 'Peso Argentino' },
+    { code: 'CLP', name: 'Peso Chileno' },
+    { code: 'BRL', name: 'Real Brasileño' }
+  ]);
   const [viewMode, setViewMode] = useState<'general' | 'monthly'>('general');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
@@ -248,6 +256,27 @@ function Dashboard() {
       console.error('Logout Error:', error);
     }
   };
+
+  // Fetch Currencies
+  useEffect(() => {
+    const fetchCurrencies = async () => {
+      try {
+        const res = await fetch('https://api.frankfurter.app/currencies');
+        if (!res.ok) throw new Error('Network response was not ok');
+        const data = await res.json();
+        const list = Object.entries(data).map(([code, name]) => ({ code, name: name as string }));
+        // Merge with defaults to ensure we have the most common ones even if API differs
+        setCurrencies(prev => {
+          const codes = new Set(list.map(c => c.code));
+          const filteredPrev = prev.filter(c => !codes.has(c.code));
+          return [...list, ...filteredPrev].sort((a, b) => a.code.localeCompare(b.code));
+        });
+      } catch (err) {
+        console.warn('Using fallback currencies due to fetch error:', err);
+      }
+    };
+    fetchCurrencies();
+  }, []);
 
   // Filtering
   const filteredTransactions = useMemo(() => {
@@ -1179,7 +1208,7 @@ function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <select 
                     value={selectedCurrency}
-                    onChange={(e) => setSelectedCurrency(e.target.value)}
+                    onChange={(e) => updateCurrency(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
                   >
                     {currencies.map(c => (
