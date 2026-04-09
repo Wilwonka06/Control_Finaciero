@@ -57,9 +57,8 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidTransaction(data) {
-      return data.keys().hasAll(['id', 'description', 'amount', 'type', 'category', 'date']) &&
+      return data.keys().hasAll(['description', 'amount', 'type', 'category', 'date']) &&
              data.keys().hasOnly(['id', 'description', 'amount', 'type', 'category', 'date']) &&
-             isValidString(data.id, 1, 100) &&
              isValidString(data.description, 1, 100) &&
              data.amount is number &&
              data.type in ['income', 'expense'] &&
@@ -68,14 +67,13 @@ service cloud.firestore {
     }
 
     function isValidGoal(data) {
-      return data.keys().hasAll(['id', 'name', 'targetAmount', 'contributions', 'createdAt']) &&
+      return data.keys().hasAll(['name', 'targetAmount', 'contributions', 'createdAt']) &&
              data.keys().hasOnly(['id', 'name', 'targetAmount', 'contributions', 'deadline', 'createdAt']) &&
-             isValidString(data.id, 1, 100) &&
              isValidString(data.name, 1, 100) &&
              data.targetAmount is number && data.targetAmount > 0 &&
              data.contributions is list &&
              isValidDateString(data.createdAt) &&
-             (!('deadline' in data) || isValidDateString(data.deadline));
+             (!('deadline' in data) || data.deadline == null || isValidDateString(data.deadline));
     }
 
     function isValidSettings(data) {

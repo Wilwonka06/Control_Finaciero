@@ -122,6 +122,25 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
+const Logo = ({ className = "w-12 h-12" }: { className?: string }) => (
+  <div className={cn("bg-slate-900 dark:bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-colors", className)}>
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className="text-white w-1/2 h-1/2"
+    >
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+      <circle cx="18" cy="14" r="1" fill="currentColor" />
+    </svg>
+  </div>
+);
+
 function Dashboard() {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -663,9 +682,7 @@ function Dashboard() {
           className="bg-white dark:bg-slate-900 p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-slate-800 max-w-md w-full text-center space-y-8"
         >
           <div className="space-y-4">
-            <div className="w-20 h-20 bg-slate-900 dark:bg-blue-600 rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-slate-900/20">
-              <Wallet size={40} className="text-white" />
-            </div>
+            <Logo className="w-20 h-20 mx-auto" />
             <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Finanzas Pro</h1>
             <p className="text-slate-500 dark:text-slate-400 text-lg">Toma el control total de tu dinero en cualquier dispositivo.</p>
           </div>
@@ -808,9 +825,7 @@ function Dashboard() {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center justify-between w-full md:w-auto">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-slate-900 dark:bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10">
-                <Wallet size={24} className="text-white" />
-              </div>
+              <Logo />
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Finanzas Pro</h1>
                 <p className="text-slate-500 dark:text-slate-400 text-sm">Hola, {user.displayName?.split(' ')[0] || 'Usuario'}</p>
@@ -1685,9 +1700,7 @@ function Dashboard() {
             >
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-900 dark:bg-blue-600 rounded-xl flex items-center justify-center">
-                    <Wallet size={20} className="text-white" />
-                  </div>
+                  <Logo className="w-10 h-10" />
                   <h2 className="font-bold dark:text-white">Menú Principal</h2>
                 </div>
                 <button onClick={() => setShowMobileMenu(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors dark:text-slate-400">
