@@ -47,10 +47,11 @@ import {
   Pie
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Bell, FileUp, Sparkles, Send, Loader2 } from 'lucide-react';
+import { MessageSquare, Bell, FileUp, FileDown, Sparkles, Send, Loader2, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Transaction, Goal, TransactionType, Currency, Contribution } from './types';
 import { cn, formatCurrency } from './lib/utils';
-import { analyzeFinances, parseExcelData } from './services/geminiService';
+import { analyzeFinances, parseExcelData, predictFinances } from './services/geminiService';
+import * as XLSX from 'xlsx';
 
 // Firebase Imports
 import { auth, db, googleProvider } from './firebase';
@@ -74,7 +75,8 @@ import {
   query, 
   orderBy,
   getDoc,
-  getDocFromServer
+  getDocFromServer,
+  updateDoc
 } from 'firebase/firestore';
 
 // Error Boundary Component
@@ -166,7 +168,10 @@ function Dashboard() {
   const [notifications, setNotifications] = useState<{ id: string, text: string, type: 'info' | 'success' | 'warning', read: boolean }[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isPredicting, setIsPredicting] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [showGoalDetails, setShowGoalDetails] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -455,6 +460,43 @@ function Dashboard() {
     }
   };
 
+  const handleExportData = () => {
+    const dataToExport = transactions.map(t => ({
+      Fecha: t.date,
+      Descripción: t.description,
+      Monto: t.amount,
+      Tipo: t.type === 'income' ? 'Ingreso' : 'Gasto',
+      Categoría: t.category
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transacciones");
+    XLSX.writeFile(wb, `Finanzas_Pro_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    
+    setNotifications(prev => [
+      { id: crypto.randomUUID(), text: "Datos exportados correctamente a Excel.", type: 'success', read: false },
+      ...prev
+    ]);
+  };
+
+  const handlePredictiveAnalysis = async () => {
+    setIsPredicting(true);
+    try {
+      const prediction = await predictFinances(transactions, goals);
+      setChatMessages(prev => [...prev, { role: 'ai', text: prediction }]);
+      setShowChat(true);
+    } catch (error) {
+      console.error('Prediction Error:', error);
+      setNotifications(prev => [
+        { id: crypto.randomUUID(), text: "No se pudo generar el análisis predictivo.", type: 'warning', read: false },
+        ...prev
+      ]);
+    } finally {
+      setIsPredicting(false);
+    }
+  };
+
   // Filtering
   const filteredTransactions = useMemo(() => {
     if (viewMode === 'general') return transactions;
@@ -512,6 +554,48 @@ function Dashboard() {
       setShowAddModal(false);
     } catch (error) {
       handleFirestoreError(error, 'create', `users/${user.uid}/transactions`);
+    }
+  };
+
+  const handleEditGoal = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user || !editingGoal || !goalName || !goalTarget) return;
+
+    try {
+      const goalRef = doc(db, 'users', user.uid, 'goals', editingGoal.id);
+      await updateDoc(goalRef, {
+        name: goalName,
+        targetAmount: parseFloat(goalTarget),
+        deadline: goalDeadline || null
+      });
+      setEditingGoal(null);
+      setGoalName('');
+      setGoalTarget('');
+      setGoalDeadline('');
+      setNotifications(prev => [
+        { id: crypto.randomUUID(), text: "Meta actualizada correctamente.", type: 'success', read: false },
+        ...prev
+      ]);
+    } catch (error) {
+      handleFirestoreError(error, 'update', `users/${user.uid}/goals/${editingGoal.id}`);
+    }
+  };
+
+  const handleDeleteContribution = async (goalId: string, contributionId: string) => {
+    if (!user) return;
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    try {
+      const goalRef = doc(db, 'users', user.uid, 'goals', goalId);
+      const updatedContributions = goal.contributions.filter(c => c.id !== contributionId);
+      await updateDoc(goalRef, { contributions: updatedContributions });
+      setNotifications(prev => [
+        { id: crypto.randomUUID(), text: "Aporte eliminado.", type: 'info', read: false },
+        ...prev
+      ]);
+    } catch (error) {
+      handleFirestoreError(error, 'update', `users/${user.uid}/goals/${goalId}`);
     }
   };
 
@@ -819,13 +903,30 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* Burger Menu Button (Mobile Only) */}
-            <button 
-              onClick={() => setShowMobileMenu(true)}
-              className="md:hidden p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400"
-            >
-              <Menu size={24} />
-            </button>
+            {/* Mobile Actions */}
+            <div className="flex md:hidden gap-2">
+              <button 
+                onClick={handlePredictiveAnalysis}
+                disabled={isPredicting}
+                className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400"
+                title="Análisis Predictivo"
+              >
+                {isPredicting ? <Loader2 size={20} className="text-blue-500 animate-spin" /> : <Sparkles size={20} className="text-blue-500" />}
+              </button>
+              <button 
+                onClick={handleExportData}
+                className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400"
+                title="Exportar"
+              >
+                <FileDown size={20} />
+              </button>
+              <button 
+                onClick={() => setShowMobileMenu(true)}
+                className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400"
+              >
+                <Menu size={24} />
+              </button>
+            </div>
           </div>
           
           <div className="hidden md:flex gap-3">
@@ -889,6 +990,23 @@ function Dashboard() {
               </AnimatePresence>
             </div>
 
+            <button 
+              onClick={handlePredictiveAnalysis}
+              disabled={isPredicting}
+              className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm flex items-center justify-center group relative"
+              title="Análisis Predictivo"
+            >
+              {isPredicting ? <Loader2 size={20} className="text-blue-500 animate-spin" /> : <Sparkles size={20} className="text-blue-500 group-hover:scale-110 transition-transform" />}
+            </button>
+
+            <button 
+              onClick={handleExportData}
+              className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm flex items-center justify-center"
+              title="Exportar a Excel"
+            >
+              <FileDown size={20} className="text-slate-600 dark:text-slate-400" />
+            </button>
+
             <label className="cursor-pointer p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm flex items-center justify-center" title="Importar Excel">
               <FileUp size={20} className="text-slate-600 dark:text-slate-400" />
               <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={isImporting} />
@@ -908,6 +1026,24 @@ function Dashboard() {
               title="Cerrar Sesión"
             >
               <LogOut size={20} />
+            </button>
+          </div>
+
+          {/* Desktop Quick Actions */}
+          <div className="hidden md:flex gap-3">
+            <button 
+              onClick={() => { setType('expense'); setCategory(categories.expense[0]); setShowAddModal(true); }}
+              className="flex items-center gap-2 bg-slate-900 dark:bg-blue-600 text-white px-6 py-3 rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-slate-900/10 active:scale-95 text-sm font-bold"
+            >
+              <PlusCircle size={18} />
+              Nuevo Movimiento
+            </button>
+            <button 
+              onClick={() => setShowGoalModal(true)}
+              className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 text-sm font-bold"
+            >
+              <Target size={18} />
+              Nueva Meta
             </button>
           </div>
 
@@ -1126,7 +1262,7 @@ function Dashboard() {
                   onClick={() => setShowGoalModal(true)}
                   className="text-blue-600 dark:text-blue-400 hover:opacity-80 text-sm font-bold flex items-center gap-1"
                 >
-                  <Plus size={16} /> Ver todas
+                  <Plus size={16} /> Añadir 
                 </button>
               </div>
               
@@ -1163,6 +1299,24 @@ function Dashboard() {
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{progress.toFixed(0)}% completado</span>
                           <div className="flex items-center gap-2">
                             <button 
+                              onClick={() => {
+                                setEditingGoal(goal);
+                                setGoalName(goal.name);
+                                setGoalTarget(goal.targetAmount.toString());
+                                setGoalDeadline(goal.deadline || '');
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-blue-500 transition-all"
+                              title="Editar Meta"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button 
+                              onClick={() => setShowGoalDetails(showGoalDetails === goal.id ? null : goal.id)}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 transition-all"
+                            >
+                              {showGoalDetails === goal.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </button>
+                            <button 
                               onClick={() => setShowContributionModal(goal.id)}
                               className="text-[10px] font-bold bg-slate-900 dark:bg-slate-700 text-white px-3 py-1.5 rounded-lg hover:opacity-80 transition-all"
                             >
@@ -1170,12 +1324,46 @@ function Dashboard() {
                             </button>
                             <button 
                               onClick={() => deleteGoal(goal.id)}
-                              className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all"
+                              className="p-1.5 text-slate-400 hover:text-rose-500 transition-all"
                             >
                               <Trash2 size={14} />
                             </button>
                           </div>
                         </div>
+
+                        {/* Goal Details / Contributions */}
+                        <AnimatePresence>
+                          {showGoalDetails === goal.id && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden pt-4 space-y-3 border-t border-slate-100 dark:border-slate-800 mt-4"
+                            >
+                              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Historial de Aportes</h4>
+                              <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                                {goal.contributions && goal.contributions.length > 0 ? (
+                                  goal.contributions.map(c => (
+                                    <div key={c.id} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-50 dark:border-slate-800 text-xs">
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(c.amount, selectedCurrency)}</span>
+                                        <span className="text-[10px] text-slate-400">{new Date(c.date).toLocaleDateString()}</span>
+                                      </div>
+                                      <button 
+                                        onClick={() => handleDeleteContribution(goal.id, c.id)}
+                                        className="text-slate-300 hover:text-rose-500 transition-all"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-[10px] text-slate-400 italic">No hay aportes aún.</p>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     );
                   })
@@ -1505,6 +1693,80 @@ function Dashboard() {
         )}
       </AnimatePresence>
 
+      {/* Edit Goal Modal */}
+      <AnimatePresence>
+        {editingGoal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditingGoal(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-6"
+            >
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold dark:text-white">Editar Meta</h2>
+                <button onClick={() => setEditingGoal(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditGoal} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nombre de la meta</label>
+                  <input 
+                    type="text" 
+                    value={goalName}
+                    onChange={(e) => setGoalName(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto Objetivo</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={goalTarget}
+                        onChange={(e) => setGoalTarget(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Fecha Límite</label>
+                    <input 
+                      type="date" 
+                      value={goalDeadline}
+                      onChange={(e) => setGoalDeadline(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/10 active:scale-[0.98]"
+                >
+                  Guardar Cambios
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Contribution Modal */}
       <AnimatePresence>
         {showContributionModal && (
@@ -1750,6 +2012,27 @@ function Dashboard() {
                       <span className="ml-2 inline-block w-2 h-2 bg-rose-500 rounded-full" />
                     )}
                   </div>
+                </button>
+
+                <button 
+                  onClick={() => { handlePredictiveAnalysis(); setShowMobileMenu(false); }}
+                  disabled={isPredicting}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-700 dark:text-slate-200 group"
+                >
+                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                    {isPredicting ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+                  </div>
+                  <span className="font-medium">Análisis Predictivo</span>
+                </button>
+
+                <button 
+                  onClick={() => { handleExportData(); setShowMobileMenu(false); }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-700 dark:text-slate-200 group"
+                >
+                  <div className="p-2 bg-slate-500/10 text-slate-500 rounded-xl group-hover:bg-slate-500/20 transition-colors">
+                    <FileDown size={20} />
+                  </div>
+                  <span className="font-medium">Exportar a Excel</span>
                 </button>
 
                 <label className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-700 dark:text-slate-200 cursor-pointer group">

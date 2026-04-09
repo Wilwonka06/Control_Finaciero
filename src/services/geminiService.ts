@@ -9,24 +9,24 @@ export const analyzeFinances = async (transactions: Transaction[], goals: any[],
   }
 
   const systemPrompt = `
-    Eres un asistente financiero experto llamado "Finanzas Pro AI". 
-    Tu objetivo es ayudar al usuario a gestionar su dinero, entender sus gastos y alcanzar sus metas de ahorro.
+    Eres un asistente financiero experto y versátil llamado "Finanzas Pro AI". 
+    Tu objetivo es ayudar al usuario a gestionar su dinero, entender sus gastos y alcanzar sus metas de ahorro, pero también puedes conversar sobre temas financieros más amplios, economía, inversiones y planificación de vida.
     
     Datos actuales del usuario:
     - Transacciones recientes: ${JSON.stringify(transactions.slice(0, 50))}
     - Metas de ahorro: ${JSON.stringify(goals)}
     
     Instrucciones de respuesta:
-    1. Sé conciso, profesional y motivador.
-    2. Si el usuario te saluda (ej. "hola"), responde amablemente, preséntate y ofrece ayuda con sus finanzas.
-    3. Si el usuario hace una pregunta general, responde basándote en los datos si es posible, o da consejos financieros generales.
-    4. Si detectas problemas en los gastos, sugiérele formas de ahorrar.
+    1. Sé profesional, motivador y abierto a preguntas complejas.
+    2. Si el usuario te saluda, responde amablemente y ofrece ayuda.
+    3. Usa los datos del usuario para dar respuestas personalizadas cuando sea relevante.
+    4. Si el usuario pregunta sobre algo fuera de finanzas, intenta relacionarlo con el impacto financiero si es posible, pero mantente flexible.
     5. Responde siempre en español.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: [{ role: "user", parts: [{ text: query }] }],
       config: {
         systemInstruction: systemPrompt,
@@ -41,6 +41,43 @@ export const analyzeFinances = async (transactions: Transaction[], goals: any[],
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
     return "Lo siento, tuve un problema al conectar con mi cerebro de IA. Por favor, intenta de nuevo en unos momentos.";
+  }
+};
+
+export const predictFinances = async (transactions: Transaction[], goals: any[]) => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("La API Key de Gemini no está configurada.");
+  }
+
+  const prompt = `
+    Basado en el historial de transacciones y metas del usuario, realiza un análisis predictivo para el próximo mes.
+    
+    Datos:
+    - Transacciones: ${JSON.stringify(transactions.slice(0, 100))}
+    - Metas: ${JSON.stringify(goals)}
+    
+    Por favor proporciona:
+    1. Una estimación de gastos totales para el próximo mes.
+    2. Categorías donde es probable que gaste más.
+    3. Una recomendación específica para alcanzar sus metas más rápido.
+    4. Un "puntaje de salud financiera" del 1 al 100.
+    
+    Responde de forma estructurada y amigable en español.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        systemInstruction: "Eres un analista financiero predictivo de alto nivel.",
+      },
+    });
+    
+    return response.text;
+  } catch (error) {
+    console.error("Gemini Prediction Error:", error);
+    throw new Error("No pude generar el análisis predictivo en este momento.");
   }
 };
 
@@ -63,7 +100,7 @@ export const parseExcelData = async (base64Data: string, mimeType: string): Prom
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: {
         parts: [
           { text: prompt },
