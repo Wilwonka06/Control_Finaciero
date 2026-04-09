@@ -124,20 +124,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 const Logo = ({ className = "w-12 h-12" }: { className?: string }) => (
   <div className={cn("bg-slate-900 dark:bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-colors", className)}>
-    <svg 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className="text-white w-1/2 h-1/2"
-    >
-      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
-      <circle cx="18" cy="14" r="1" fill="currentColor" />
-    </svg>
+    <Wallet className="text-white w-1/2 h-1/2" strokeWidth={2.5} />
   </div>
 );
 
@@ -1391,6 +1378,11 @@ function Dashboard() {
                         required
                       />
                     </div>
+                    {amount && !isNaN(parseFloat(amount)) && (
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
+                        Vista previa: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(amount), selectedCurrency)}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1484,6 +1476,11 @@ function Dashboard() {
                         required
                       />
                     </div>
+                    {goalTarget && !isNaN(parseFloat(goalTarget)) && (
+                      <p className="text-[10px] font-bold text-slate-400 mt-1 px-1">
+                        Vista previa: <span className="text-blue-500">{formatCurrency(parseFloat(goalTarget), selectedCurrency)}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">Fecha Límite (Opcional)</label>
@@ -1547,6 +1544,11 @@ function Dashboard() {
                       required
                     />
                   </div>
+                  {contributionAmount && !isNaN(parseFloat(contributionAmount)) && (
+                    <p className="text-[10px] font-bold text-slate-400 mt-1 px-1">
+                      Vista previa: <span className="text-blue-500">{formatCurrency(parseFloat(contributionAmount), selectedCurrency)}</span>
+                    </p>
+                  )}
                   <p className="text-xs text-slate-500">Balance disponible: {formatCurrency(totals.balance, selectedCurrency)}</p>
                 </div>
 
