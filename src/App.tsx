@@ -1397,32 +1397,32 @@ function Dashboard() {
                       exit={{ opacity: 0, x: -20 }}
                       className="group flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent hover:border-slate-100 dark:hover:border-slate-700 transition-all"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className={cn(
-                          "p-2.5 rounded-xl",
+                          "p-2.5 rounded-xl flex-shrink-0",
                           t.type === 'income' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
                         )}>
                           {t.type === 'income' ? <ArrowUpRight size={18} /> : <TrendingDown size={18} />}
                         </div>
-                        <div>
-                          <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{t.description}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate" title={t.description}>{t.description}</p>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t.category}</span>
-                            <span className="text-[10px] text-slate-300">•</span>
-                            <span className="text-[10px] text-slate-400">{new Date(t.date).toLocaleDateString()}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">{t.category}</span>
+                            <span className="text-[10px] text-slate-300 flex-shrink-0">•</span>
+                            <span className="text-[10px] text-slate-400 flex-shrink-0">{new Date(t.date).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-2">
                         <span className={cn(
-                          "font-bold text-sm font-mono",
+                          "font-bold text-sm font-mono whitespace-nowrap",
                           t.type === 'income' ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                         )}>
                           {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, selectedCurrency)}
                         </span>
                         <button 
                           onClick={() => setTransactionToDelete(t.id)}
-                          className="text-slate-400 dark:text-slate-500 hover:text-rose-500 transition-all p-1"
+                          className="text-slate-400 dark:text-slate-500 hover:text-rose-500 transition-all p-1 flex-shrink-0"
                         >
                           <Trash2 size={16} />
                         </button>
