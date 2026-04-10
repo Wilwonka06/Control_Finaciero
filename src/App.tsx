@@ -172,6 +172,7 @@ function Dashboard() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [showGoalDetails, setShowGoalDetails] = useState<string | null>(null);
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -1351,7 +1352,7 @@ function Dashboard() {
                                       </div>
                                       <button 
                                         onClick={() => handleDeleteContribution(goal.id, c.id)}
-                                        className="text-slate-300 hover:text-rose-500 transition-all"
+                                        className="text-slate-400 dark:text-slate-500 hover:text-rose-500 transition-all"
                                       >
                                         <Trash2 size={12} />
                                       </button>
@@ -1420,8 +1421,8 @@ function Dashboard() {
                           {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, selectedCurrency)}
                         </span>
                         <button 
-                          onClick={() => deleteTransaction(t.id)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-all p-1"
+                          onClick={() => setTransactionToDelete(t.id)}
+                          className="text-slate-400 dark:text-slate-500 hover:text-rose-500 transition-all p-1"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -1627,31 +1628,31 @@ function Dashboard() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-6"
+              className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-6"
             >
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Nueva Meta de Ahorro</h2>
-                <button onClick={() => setShowGoalModal(false)} className="text-slate-400 hover:text-slate-600">
+                <h2 className="text-xl font-bold dark:text-white">Nueva Meta de Ahorro</h2>
+                <button onClick={() => setShowGoalModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                   <X size={20} />
                 </button>
               </div>
 
               <form onSubmit={handleAddGoal} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Nombre de la meta</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nombre de la meta</label>
                   <input 
                     type="text" 
                     value={goalName}
                     onChange={(e) => setGoalName(e.target.value)}
                     placeholder="Ej. Fondo de emergencia"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Monto Objetivo</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto Objetivo</label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
                       <input 
@@ -1660,23 +1661,23 @@ function Dashboard() {
                         value={goalTarget}
                         onChange={(e) => setGoalTarget(e.target.value)}
                         placeholder="0.00"
-                        className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+                        className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
                         required
                       />
                     </div>
                     {goalTarget && !isNaN(parseFloat(goalTarget)) && (
-                      <p className="text-[10px] font-bold text-slate-400 mt-1 px-1">
-                        Vista previa: <span className="text-blue-500">{formatCurrency(parseFloat(goalTarget), selectedCurrency)}</span>
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
+                        Vista previa: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(goalTarget), selectedCurrency)}</span>
                       </p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Fecha Límite (Opcional)</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Fecha Límite (Opcional)</label>
                     <input 
                       type="date" 
                       value={goalDeadline}
                       onChange={(e) => setGoalDeadline(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -1782,18 +1783,18 @@ function Dashboard() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-6"
+              className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-6"
             >
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Aportar a: {goals.find(g => g.id === showContributionModal)?.name}</h2>
-                <button onClick={() => setShowContributionModal(null)} className="text-slate-400 hover:text-slate-600">
+                <h2 className="text-xl font-bold dark:text-white">Aportar a: {goals.find(g => g.id === showContributionModal)?.name}</h2>
+                <button onClick={() => setShowContributionModal(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                   <X size={20} />
                 </button>
               </div>
 
               <form onSubmit={handleAddContribution} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Monto a destinar</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto a destinar</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
                     <input 
@@ -1802,25 +1803,25 @@ function Dashboard() {
                       value={contributionAmount}
                       onChange={(e) => setContributionAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
                       required
                     />
                   </div>
                   {contributionAmount && !isNaN(parseFloat(contributionAmount)) && (
-                    <p className="text-[10px] font-bold text-slate-400 mt-1 px-1">
-                      Vista previa: <span className="text-blue-500">{formatCurrency(parseFloat(contributionAmount), selectedCurrency)}</span>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
+                      Vista previa: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(contributionAmount), selectedCurrency)}</span>
                     </p>
                   )}
-                  <p className="text-xs text-slate-500">Balance disponible: {formatCurrency(totals.balance, selectedCurrency)}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Balance disponible: {formatCurrency(totals.balance, selectedCurrency)}</p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Fecha del aporte</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Fecha del aporte</label>
                   <input 
                     type="date" 
                     value={contributionDate}
                     onChange={(e) => setContributionDate(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     required
                   />
                 </div>
@@ -1852,18 +1853,18 @@ function Dashboard() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-8 max-h-[90vh] overflow-y-auto"
+              className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-8 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Configuración</h2>
-                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600">
+                <h2 className="text-xl font-bold dark:text-white">Configuración</h2>
+                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                   <X size={20} />
                 </button>
               </div>
 
               {/* Currency Selection */}
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-800 font-semibold">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
                   <Coins size={18} />
                   <h3>Moneda Principal</h3>
                 </div>
@@ -1871,13 +1872,13 @@ function Dashboard() {
                   <select 
                     value={selectedCurrency}
                     onChange={(e) => updateCurrency(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   >
                     {currencies.map(c => (
                       <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
                     ))}
                   </select>
-                  <div className="p-4 bg-blue-50 rounded-xl text-blue-700 text-sm">
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-700 dark:text-blue-300 text-sm">
                     Los tipos de cambio se obtienen de la API de Frankfurter.
                   </div>
                 </div>
@@ -1885,7 +1886,7 @@ function Dashboard() {
 
               {/* Category Management */}
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-800 font-semibold">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
                   <Settings size={18} />
                   <h3>Gestionar Categorías</h3>
                 </div>
@@ -1894,7 +1895,7 @@ function Dashboard() {
                   <select 
                     value={newCatType}
                     onChange={(e) => setNewCatType(e.target.value as TransactionType)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
                   >
                     <option value="expense">Gasto</option>
                     <option value="income">Ingreso</option>
@@ -1904,9 +1905,9 @@ function Dashboard() {
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
                     placeholder="Nueva categoría..."
-                    className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm"
                   />
-                  <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">
+                  <button type="submit" className="bg-slate-900 dark:bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold">
                     Añadir
                   </button>
                 </form>
@@ -1916,7 +1917,7 @@ function Dashboard() {
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gastos</h4>
                     <div className="flex flex-wrap gap-2">
                       {categories.expense.map(cat => (
-                        <div key={cat} className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-lg text-sm group">
+                        <div key={cat} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg text-sm group dark:text-slate-300">
                           {cat}
                           <button onClick={() => deleteCategory('expense', cat)} className="text-slate-400 hover:text-rose-500">
                             <X size={14} />
@@ -1929,7 +1930,7 @@ function Dashboard() {
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ingresos</h4>
                     <div className="flex flex-wrap gap-2">
                       {categories.income.map(cat => (
-                        <div key={cat} className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-lg text-sm group">
+                        <div key={cat} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg text-sm group dark:text-slate-300">
                           {cat}
                           <button onClick={() => deleteCategory('income', cat)} className="text-slate-400 hover:text-rose-500">
                             <X size={14} />
@@ -2071,6 +2072,49 @@ function Dashboard() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {transactionToDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setTransactionToDelete(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl p-8 text-center space-y-6"
+            >
+              <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
+                <Trash2 size={32} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold dark:text-white">¿Confirmar eliminación?</h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Esta acción no se puede deshacer. El movimiento será borrado permanentemente.</p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setTransactionToDelete(null)}
+                  className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => { deleteTransaction(transactionToDelete); setTransactionToDelete(null); }}
+                  className="flex-1 bg-rose-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/10"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
