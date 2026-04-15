@@ -81,13 +81,13 @@ export const predictFinances = async (transactions: Transaction[], goals: any[])
   }
 };
 
-export const parseExcelData = async (base64Data: string, mimeType: string): Promise<Partial<Transaction>[]> => {
+export const parseExcelData = async (csvText: string): Promise<Partial<Transaction>[]> => {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("La API Key de Gemini no está configurada.");
   }
 
   const prompt = `
-    Analiza este archivo financiero y extrae una lista de transacciones.
+    Analiza los siguientes datos financieros en formato CSV y extrae una lista de transacciones.
     Para cada transacción necesito:
     - description (string)
     - amount (number, positivo)
@@ -95,16 +95,18 @@ export const parseExcelData = async (base64Data: string, mimeType: string): Prom
     - category (string, intenta categorizar si no está explícito)
     - date (string en formato YYYY-MM-DD)
 
+    Datos CSV:
+    ${csvText}
+
     Responde ÚNICAMENTE con un array JSON válido.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-1.5-flash",
       contents: {
         parts: [
-          { text: prompt },
-          { inlineData: { data: base64Data, mimeType } }
+          { text: prompt }
         ]
       },
       config: {

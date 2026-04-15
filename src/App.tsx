@@ -50,6 +50,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Bell, FileUp, FileDown, Sparkles, Send, Loader2, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Transaction, Goal, TransactionType, Currency, Contribution } from './types';
 import { cn, formatCurrency } from './lib/utils';
+import ReactMarkdown from 'react-markdown';
 import { analyzeFinances, parseExcelData, predictFinances } from './services/geminiService';
 import * as XLSX from 'xlsx';
 
@@ -168,7 +169,6 @@ function Dashboard() {
   const [notifications, setNotifications] = useState<{ id: string, text: string, type: 'info' | 'success' | 'warning', read: boolean }[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [isPredicting, setIsPredicting] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [showGoalDetails, setShowGoalDetails] = useState<string | null>(null);
@@ -207,6 +207,8 @@ function Dashboard() {
 
   const [newCatName, setNewCatName] = useState('');
   const [newCatType, setNewCatType] = useState<TransactionType>('expense');
+
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({ COP: 1 });
 
   // Auth Listener
   useEffect(() => {
@@ -302,12 +304,41 @@ function Dashboard() {
     console.error('Firestore Error:', JSON.stringify(errInfo));
   };
 
+  // Fetch Exchange Rates
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        // We use COP as the base for our internal data
+        const res = await fetch('https://open.er-api.com/v6/latest/COP');
+        if (!res.ok) throw new Error('Failed to fetch rates');
+        const data = await res.json();
+        setExchangeRates(data.rates);
+      } catch (err) {
+        console.warn('Error fetching exchange rates:', err);
+      }
+    };
+    fetchRates();
+  }, []);
+
   // Auth Handlers
   const handleLogin = async () => {
+    setAuthError('');
+    setAuthLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login Error:', error);
+      if (error.code === 'auth/network-request-failed') {
+        setAuthError('Error de red: No se pudo conectar con Firebase. Revisa tu conexión a internet o si tienes un bloqueador de anuncios activado.');
+      } else if (error.code === 'auth/popup-blocked') {
+        setAuthError('El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para iniciar sesión.');
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        setAuthError('Inicio de sesión cancelado.');
+      } else {
+        setAuthError('Error al iniciar sesión: ' + (error.message || 'Inténtalo de nuevo.'));
+      }
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -337,7 +368,15 @@ function Dashboard() {
       }
     } catch (error: any) {
       console.error('Auth Error:', error);
-      setAuthError(error.message || 'Ocurrió un error en la autenticación.');
+      if (error.code === 'auth/invalid-credential') {
+        setAuthError('Correo o contraseña incorrectos. Verifica tus datos e inténtalo de nuevo.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setAuthError('El inicio de sesión por correo no está habilitado. Por favor, actívalo en la consola de Firebase.');
+      } else if (error.code === 'auth/email-already-in-use') {
+        setAuthError('Este correo ya está registrado. Intenta iniciar sesión.');
+      } else {
+        setAuthError(error.message || 'Ocurrió un error en la autenticación.');
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -435,29 +474,45 @@ function Dashboard() {
     try {
       const reader = new FileReader();
       reader.onload = async (event) => {
-        const base64 = (event.target?.result as string).split(',')[1];
-        const importedData = await parseExcelData(base64, file.type);
-        
-        // Save to Firestore
-        const batch = importedData.map(t => 
-          addDoc(collection(db, 'users', user.uid, 'transactions'), {
-            ...t,
-            date: t.date || new Date().toISOString().slice(0, 10)
-          })
-        );
-        await Promise.all(batch);
-        
-        setNotifications(prev => [
-          { id: crypto.randomUUID(), text: `Se importaron ${importedData.length} transacciones correctamente.`, type: 'success', read: false },
-          ...prev
-        ]);
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const csvText = XLSX.utils.sheet_to_csv(worksheet);
+
+          const importedData = await parseExcelData(csvText);
+          
+          // Save to Firestore
+          const batch = importedData.map(t => 
+            addDoc(collection(db, 'users', user.uid, 'transactions'), {
+              ...t,
+              date: t.date || new Date().toISOString().slice(0, 10)
+            })
+          );
+          await Promise.all(batch);
+          
+          setNotifications(prev => [
+            { id: crypto.randomUUID(), text: `Se importaron ${importedData.length} transacciones correctamente.`, type: 'success', read: false },
+            ...prev
+          ]);
+        } catch (error) {
+          console.error("Import Error:", error);
+          setNotifications(prev => [
+            { id: crypto.randomUUID(), text: "Error al procesar el archivo. Asegúrate de que tenga un formato válido.", type: 'warning', read: false },
+            ...prev
+          ]);
+        } finally {
+          setIsImporting(false);
+          // Reset file input
+          e.target.value = '';
+        }
       };
-      reader.readAsDataURL(file);
+      reader.readAsArrayBuffer(file);
     } catch (error) {
-      console.error('Import Error:', error);
-      alert('Error al importar el archivo. Intenta con un formato más simple.');
-    } finally {
+      console.error('File Read Error:', error);
       setIsImporting(false);
+      alert('Error al leer el archivo.');
     }
   };
 
@@ -481,23 +536,6 @@ function Dashboard() {
     ]);
   };
 
-  const handlePredictiveAnalysis = async () => {
-    setIsPredicting(true);
-    try {
-      const prediction = await predictFinances(transactions, goals);
-      setChatMessages(prev => [...prev, { role: 'ai', text: prediction }]);
-      setShowChat(true);
-    } catch (error) {
-      console.error('Prediction Error:', error);
-      setNotifications(prev => [
-        { id: crypto.randomUUID(), text: "No se pudo generar el análisis predictivo.", type: 'warning', read: false },
-        ...prev
-      ]);
-    } finally {
-      setIsPredicting(false);
-    }
-  };
-
   // Filtering
   const filteredTransactions = useMemo(() => {
     if (viewMode === 'general') return transactions;
@@ -506,18 +544,21 @@ function Dashboard() {
 
   // Calculations
   const totals = useMemo(() => {
+    const rate = exchangeRates[selectedCurrency] || 1;
+    
     const income = filteredTransactions
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
     const expenses = filteredTransactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
+      
     return {
-      income,
-      expenses,
-      balance: income - expenses
+      income: income * rate,
+      expenses: expenses * rate,
+      balance: (income - expenses) * rate
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, selectedCurrency, exchangeRates]);
 
   const chartData = useMemo(() => {
     return [
@@ -907,14 +948,6 @@ function Dashboard() {
             {/* Mobile Actions */}
             <div className="flex md:hidden gap-2">
               <button 
-                onClick={handlePredictiveAnalysis}
-                disabled={isPredicting}
-                className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400"
-                title="Análisis Predictivo"
-              >
-                {isPredicting ? <Loader2 size={20} className="text-blue-500 animate-spin" /> : <Sparkles size={20} className="text-blue-500" />}
-              </button>
-              <button 
                 onClick={handleExportData}
                 className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-600 dark:text-slate-400"
                 title="Exportar"
@@ -990,15 +1023,6 @@ function Dashboard() {
                 )}
               </AnimatePresence>
             </div>
-
-            <button 
-              onClick={handlePredictiveAnalysis}
-              disabled={isPredicting}
-              className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm flex items-center justify-center group relative"
-              title="Análisis Predictivo"
-            >
-              {isPredicting ? <Loader2 size={20} className="text-blue-500 animate-spin" /> : <Sparkles size={20} className="text-blue-500 group-hover:scale-110 transition-transform" />}
-            </button>
 
             <button 
               onClick={handleExportData}
@@ -1282,8 +1306,8 @@ function Dashboard() {
                             )}
                           </div>
                           <div className="text-right">
-                            <span className="text-slate-500 dark:text-slate-400 block font-mono text-xs">{formatCurrency(goalTotal, selectedCurrency)}</span>
-                            <span className="text-slate-400 dark:text-slate-500 block text-[10px]">de {formatCurrency(goal.targetAmount, selectedCurrency)}</span>
+                            <span className="text-slate-500 dark:text-slate-400 block font-mono text-xs">{formatCurrency(goalTotal * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
+                            <span className="text-slate-400 dark:text-slate-500 block text-[10px]">de {formatCurrency(goal.targetAmount * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
                           </div>
                         </div>
                         <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -1347,7 +1371,7 @@ function Dashboard() {
                                   goal.contributions.map(c => (
                                     <div key={c.id} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-50 dark:border-slate-800 text-xs">
                                       <div className="flex flex-col">
-                                        <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(c.amount, selectedCurrency)}</span>
+                                        <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(c.amount * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
                                         <span className="text-[10px] text-slate-400">{new Date(c.date).toLocaleDateString()}</span>
                                       </div>
                                       <button 
@@ -1418,7 +1442,7 @@ function Dashboard() {
                           "font-bold text-sm font-mono whitespace-nowrap",
                           t.type === 'income' ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                         )}>
-                          {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, selectedCurrency)}
+                          {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}
                         </span>
                         <button 
                           onClick={() => setTransactionToDelete(t.id)}
@@ -1554,9 +1578,9 @@ function Dashboard() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto (en COP)</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">COP</span>
                       <input 
                         type="number" 
                         step="0.01"
@@ -1567,9 +1591,9 @@ function Dashboard() {
                         required
                       />
                     </div>
-                    {amount && !isNaN(parseFloat(amount)) && (
+                    {amount && !isNaN(parseFloat(amount)) && selectedCurrency !== 'COP' && (
                       <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
-                        Vista previa: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(amount), selectedCurrency)}</span>
+                        Equivale a: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(amount) * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
                       </p>
                     )}
                   </div>
@@ -1652,9 +1676,9 @@ function Dashboard() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto Objetivo</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto Objetivo (en COP)</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">COP</span>
                       <input 
                         type="number" 
                         step="0.01"
@@ -1665,9 +1689,9 @@ function Dashboard() {
                         required
                       />
                     </div>
-                    {goalTarget && !isNaN(parseFloat(goalTarget)) && (
+                    {goalTarget && !isNaN(parseFloat(goalTarget)) && selectedCurrency !== 'COP' && (
                       <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
-                        Vista previa: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(goalTarget), selectedCurrency)}</span>
+                        Equivale a: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(goalTarget) * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
                       </p>
                     )}
                   </div>
@@ -1732,9 +1756,9 @@ function Dashboard() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto Objetivo</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto Objetivo (en COP)</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">COP</span>
                       <input 
                         type="number" 
                         step="0.01"
@@ -1744,6 +1768,11 @@ function Dashboard() {
                         required
                       />
                     </div>
+                    {goalTarget && !isNaN(parseFloat(goalTarget)) && selectedCurrency !== 'COP' && (
+                      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
+                        Equivale a: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(goalTarget) * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Fecha Límite</label>
@@ -1794,9 +1823,9 @@ function Dashboard() {
 
               <form onSubmit={handleAddContribution} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto a destinar</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monto a destinar (en COP)</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{selectedCurrency}</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">COP</span>
                     <input 
                       type="number" 
                       step="0.01"
@@ -1807,9 +1836,9 @@ function Dashboard() {
                       required
                     />
                   </div>
-                  {contributionAmount && !isNaN(parseFloat(contributionAmount)) && (
+                  {contributionAmount && !isNaN(parseFloat(contributionAmount)) && selectedCurrency !== 'COP' && (
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-1">
-                      Vista previa: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(contributionAmount), selectedCurrency)}</span>
+                      Equivale a: <span className="text-blue-500 dark:text-blue-400">{formatCurrency(parseFloat(contributionAmount) * (exchangeRates[selectedCurrency] || 1), selectedCurrency)}</span>
                     </p>
                   )}
                   <p className="text-xs text-slate-500 dark:text-slate-400">Balance disponible: {formatCurrency(totals.balance, selectedCurrency)}</p>
@@ -2016,17 +2045,6 @@ function Dashboard() {
                 </button>
 
                 <button 
-                  onClick={() => { handlePredictiveAnalysis(); setShowMobileMenu(false); }}
-                  disabled={isPredicting}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-700 dark:text-slate-200 group"
-                >
-                  <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                    {isPredicting ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
-                  </div>
-                  <span className="font-medium">Análisis Predictivo</span>
-                </button>
-
-                <button 
                   onClick={() => { handleExportData(); setShowMobileMenu(false); }}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-700 dark:text-slate-200 group"
                 >
@@ -2194,7 +2212,13 @@ function Dashboard() {
                         ? "bg-slate-900 dark:bg-blue-600 text-white rounded-tr-none" 
                         : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-700"
                     )}>
-                      {msg.text}
+                      {msg.role === 'user' ? (
+                        msg.text
+                      ) : (
+                        <div className="markdown-body prose dark:prose-invert prose-sm max-w-none">
+                          <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
