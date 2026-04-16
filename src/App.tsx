@@ -369,7 +369,7 @@ function Dashboard() {
     } catch (error: any) {
       console.error('Auth Error:', error);
       if (error.code === 'auth/invalid-credential') {
-        setAuthError('Correo o contraseña incorrectos. Verifica tus datos e inténtalo de nuevo.');
+        setAuthError('Correo o contraseña incorrectos. Si no tienes cuenta, asegúrate de registrarte primero.');
       } else if (error.code === 'auth/operation-not-allowed') {
         setAuthError('El inicio de sesión por correo no está habilitado. Por favor, actívalo en la consola de Firebase.');
       } else if (error.code === 'auth/email-already-in-use') {
@@ -669,10 +669,6 @@ function Dashboard() {
     if (!user || !showContributionModal || !contributionAmount) return;
 
     const amount = parseFloat(contributionAmount);
-    if (amount > totals.balance) {
-      alert('No tienes suficiente balance para esta contribución.');
-      return;
-    }
 
     const goal = goals.find(g => g.id === showContributionModal);
     if (!goal) return;
