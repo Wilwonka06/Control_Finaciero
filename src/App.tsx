@@ -52,7 +52,7 @@ import { Transaction, Goal, TransactionType, Currency, Contribution } from './ty
 import { cn, formatCurrency } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { analyzeFinances, parseExcelData, predictFinances } from './services/geminiService';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // Firebase Imports
 import { auth, db, googleProvider } from './firebase';
@@ -475,11 +475,24 @@ function Dashboard() {
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          const data = new Uint8Array(event.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const csvText = XLSX.utils.sheet_to_csv(worksheet);
+          let csvText = '';
+
+          if (file.name.endsWith('.csv')) {
+            csvText = new TextDecoder().decode(event.target?.result as ArrayBuffer);
+          } else {
+            const buffer = event.target?.result as ArrayBuffer;
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(buffer);
+            const worksheet = workbook.worksheets[0]; // Obtener primera hoja
+            
+            worksheet?.eachRow((row) => {
+              // ExcelJS rows are 1-indexed, we exclude the internal structure
+              const rowValues = Array.isArray(row.values) ? row.values.slice(1) : [];
+              csvText += rowValues.join(',') + '\n';
+            });
+          }
+
+          if (!csvText.trim()) throw new Error("El archivo está vacío o no se pudo leer.");
 
           const importedData = await parseExcelData(csvText);
           
@@ -516,22 +529,49 @@ function Dashboard() {
     }
   };
 
-  const handleExportData = () => {
-    const dataToExport = transactions.map(t => ({
-      Fecha: t.date,
-      Descripción: t.description,
-      Monto: t.amount,
-      Tipo: t.type === 'income' ? 'Ingreso' : 'Gasto',
-      Categoría: t.category
-    }));
+  const handleExportData = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Transacciones');
+    
+    // Configurar encabezados
+    worksheet.columns = [
+      { header: 'Fecha', key: 'date', width: 15 },
+      { header: 'Descripción', key: 'desc', width: 30 },
+      { header: 'Monto', key: 'amount', width: 15 },
+      { header: 'Tipo', key: 'type', width: 12 },
+      { header: 'Categoría', key: 'cat', width: 20 },
+    ];
 
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Transacciones");
-    XLSX.writeFile(wb, `Finanzas_Pro_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    // Formato de encabezados
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE2E8F0' }
+    };
+
+    // Añadir datos
+    transactions.forEach(t => {
+      worksheet.addRow({
+        date: t.date,
+        desc: t.description,
+        amount: t.amount,
+        type: t.type === 'income' ? 'Ingreso' : 'Gasto',
+        cat: t.category
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `Finanzas_Pro_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
     
     setNotifications(prev => [
-      { id: crypto.randomUUID(), text: "Datos exportados correctamente a Excel.", type: 'success', read: false },
+      { id: crypto.randomUUID(), text: "Datos exportados correctamente a Excel de forma segura.", type: 'success', read: false },
       ...prev
     ]);
   };
