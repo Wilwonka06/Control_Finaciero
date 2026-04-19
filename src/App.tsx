@@ -126,8 +126,13 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 const Logo = ({ className = "w-12 h-12" }: { className?: string }) => (
-  <div className={cn("bg-slate-900 dark:bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-colors", className)}>
-    <Wallet className="text-white w-1/2 h-1/2" strokeWidth={2.5} />
+  <div className={cn("overflow-hidden rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-colors bg-white dark:bg-slate-800", className)}>
+    <img 
+      src="/logo-icon.png" 
+      alt="Finanzas Pro" 
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+    />
   </div>
 );
 
