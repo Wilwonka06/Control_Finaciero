@@ -32,7 +32,17 @@ import {
   Key,
   Eye,
   EyeOff,
-  Menu
+  Menu,
+  MessageSquare, 
+  Bell, 
+  FileUp, 
+  FileDown, 
+  Sparkles, 
+  Send, 
+  Loader2, 
+  Edit2, 
+  ChevronDown, 
+  ChevronUp 
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -47,7 +57,6 @@ import {
   Pie
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Bell, FileUp, FileDown, Sparkles, Send, Loader2, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Transaction, Goal, TransactionType, Currency, Contribution } from './types';
 import { cn, formatCurrency } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
