@@ -52,7 +52,9 @@ import { Transaction, Goal, TransactionType, Currency, Contribution } from './ty
 import { cn, formatCurrency } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { analyzeFinances, parseExcelData, predictFinances } from './services/geminiService';
-import ExcelJS from 'exceljs';
+// import * as ExcelJS from 'exceljs';
+
+const generateId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
 // Firebase Imports
 import { auth, db, googleProvider } from './firebase';
@@ -126,13 +128,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 const Logo = ({ className = "w-12 h-12" }: { className?: string }) => (
-  <div className={cn("overflow-hidden rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-colors bg-white dark:bg-slate-800", className)}>
-    <img 
-      src="/logo-icon.png" 
-      alt="Finanzas Pro" 
-      className="w-full h-full object-cover"
-      referrerPolicy="no-referrer"
-    />
+  <div className={cn("bg-slate-900 dark:bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/10 transition-colors", className)}>
+    <Wallet className="text-white w-1/2 h-1/2" strokeWidth={2.5} />
   </div>
 );
 
@@ -485,16 +482,19 @@ function Dashboard() {
           if (file.name.endsWith('.csv')) {
             csvText = new TextDecoder().decode(event.target?.result as ArrayBuffer);
           } else {
+            /* 
             const buffer = event.target?.result as ArrayBuffer;
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(buffer);
-            const worksheet = workbook.worksheets[0]; // Obtener primera hoja
+            const worksheet = workbook.worksheets[0]; 
             
             worksheet?.eachRow((row) => {
-              // ExcelJS rows are 1-indexed, we exclude the internal structure
               const rowValues = Array.isArray(row.values) ? row.values.slice(1) : [];
               csvText += rowValues.join(',') + '\n';
             });
+            */
+            alert('La importación de Excel está temporalmente deshabilitada por mantenimiento técnico. Por favor usa archivos .csv.');
+            return;
           }
 
           if (!csvText.trim()) throw new Error("El archivo está vacío o no se pudo leer.");
@@ -511,13 +511,13 @@ function Dashboard() {
           await Promise.all(batch);
           
           setNotifications(prev => [
-            { id: crypto.randomUUID(), text: `Se importaron ${importedData.length} transacciones correctamente.`, type: 'success', read: false },
+            { id: generateId(), text: `Se importaron ${importedData.length} transacciones correctamente.`, type: 'success', read: false },
             ...prev
           ]);
         } catch (error) {
           console.error("Import Error:", error);
           setNotifications(prev => [
-            { id: crypto.randomUUID(), text: "Error al procesar el archivo. Asegúrate de que tenga un formato válido.", type: 'warning', read: false },
+            { id: generateId(), text: "Error al procesar el archivo. Asegúrate de que tenga un formato válido.", type: 'warning', read: false },
             ...prev
           ]);
         } finally {
@@ -534,51 +534,12 @@ function Dashboard() {
     }
   };
 
-  const handleExportData = async () => {
+  const handleExportData = () => {
+    alert('La exportación a Excel está temporalmente deshabilitada por mantenimiento técnico.');
+    /*
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Transacciones');
-    
-    // Configurar encabezados
-    worksheet.columns = [
-      { header: 'Fecha', key: 'date', width: 15 },
-      { header: 'Descripción', key: 'desc', width: 30 },
-      { header: 'Monto', key: 'amount', width: 15 },
-      { header: 'Tipo', key: 'type', width: 12 },
-      { header: 'Categoría', key: 'cat', width: 20 },
-    ];
-
-    // Formato de encabezados
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE2E8F0' }
-    };
-
-    // Añadir datos
-    transactions.forEach(t => {
-      worksheet.addRow({
-        date: t.date,
-        desc: t.description,
-        amount: t.amount,
-        type: t.type === 'income' ? 'Ingreso' : 'Gasto',
-        cat: t.category
-      });
-    });
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `Finanzas_Pro_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-    
-    setNotifications(prev => [
-      { id: crypto.randomUUID(), text: "Datos exportados correctamente a Excel de forma segura.", type: 'success', read: false },
-      ...prev
-    ]);
+    ...
+    */
   };
 
   // Filtering
@@ -660,7 +621,7 @@ function Dashboard() {
       setGoalTarget('');
       setGoalDeadline('');
       setNotifications(prev => [
-        { id: crypto.randomUUID(), text: "Meta actualizada correctamente.", type: 'success', read: false },
+        { id: generateId(), text: "Meta actualizada correctamente.", type: 'success', read: false },
         ...prev
       ]);
     } catch (error) {
@@ -678,7 +639,7 @@ function Dashboard() {
       const updatedContributions = goal.contributions.filter(c => c.id !== contributionId);
       await updateDoc(goalRef, { contributions: updatedContributions });
       setNotifications(prev => [
-        { id: crypto.randomUUID(), text: "Aporte eliminado.", type: 'info', read: false },
+        { id: generateId(), text: "Aporte eliminado.", type: 'info', read: false },
         ...prev
       ]);
     } catch (error) {
@@ -719,7 +680,7 @@ function Dashboard() {
     if (!goal) return;
 
     const newContribution: Contribution = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       amount: amount,
       date: contributionDate
     };
