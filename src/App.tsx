@@ -61,7 +61,7 @@ import { Transaction, Goal, TransactionType, Currency, Contribution } from './ty
 import { cn, formatCurrency } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { analyzeFinances, parseExcelData, predictFinances } from './services/geminiService';
-// import * as ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 const generateId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
@@ -491,19 +491,17 @@ function Dashboard() {
           if (file.name.endsWith('.csv')) {
             csvText = new TextDecoder().decode(event.target?.result as ArrayBuffer);
           } else {
-            /* 
             const buffer = event.target?.result as ArrayBuffer;
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(buffer);
             const worksheet = workbook.worksheets[0]; 
             
-            worksheet?.eachRow((row) => {
+            const rows: any[] = [];
+            worksheet.eachRow((row) => {
               const rowValues = Array.isArray(row.values) ? row.values.slice(1) : [];
-              csvText += rowValues.join(',') + '\n';
+              rows.push(rowValues.join(','));
             });
-            */
-            alert('La importación de Excel está temporalmente deshabilitada por mantenimiento técnico. Por favor usa archivos .csv.');
-            return;
+            csvText = rows.join('\n');
           }
 
           if (!csvText.trim()) throw new Error("El archivo está vacío o no se pudo leer.");
@@ -543,12 +541,86 @@ function Dashboard() {
     }
   };
 
-  const handleExportData = () => {
-    alert('La exportación a Excel está temporalmente deshabilitada por mantenimiento técnico.');
-    /*
-    const workbook = new ExcelJS.Workbook();
-    ...
-    */
+  const handleExportData = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const wsTransactions = workbook.addWorksheet('Transacciones');
+      
+      // Hoja 1: Tabla de Transacciones
+      wsTransactions.addTable({
+        name: 'TransaccionesTable',
+        ref: 'A1',
+        headerRow: true,
+        columns: [
+          { name: 'Fecha', filterButton: true },
+          { name: 'Descripción', filterButton: true },
+          { name: 'Monto', filterButton: true },
+          { name: 'Tipo', filterButton: true },
+          { name: 'Categoría', filterButton: true },
+        ],
+        rows: transactions.map(t => [
+          t.date,
+          t.description,
+          t.amount,
+          t.type === 'income' ? 'Ingreso' : 'Gasto',
+          t.category
+        ]),
+      });
+
+      // Estilo de columnas
+      wsTransactions.columns.forEach(col => col.width = 20);
+
+      // Hoja 2: Resumen y Metas
+      const wsSummary = workbook.addWorksheet('Resumen de Metas');
+      wsSummary.addRow(['RESUMEN GENERAL']).font = { bold: true, size: 14 };
+      wsSummary.addRow(['Total Ingresos', totals.income]);
+      wsSummary.addRow(['Total Gastos', totals.expenses]);
+      wsSummary.addRow(['Balance Disponible', totals.balance]);
+      wsSummary.addRow([]);
+      wsSummary.addRow(['ESTADO DE METAS DE AHORRO']).font = { bold: true, size: 12 };
+      
+      wsSummary.addTable({
+        name: 'MetasTable',
+        ref: 'A7',
+        headerRow: true,
+        columns: [
+          { name: 'Nombre de la Meta' },
+          { name: 'Objetivo Total' },
+          { name: 'Total Ahorrado' },
+          { name: 'Progreso (%)' },
+          { name: 'Fecha Límite' }
+        ],
+        rows: goals.map(g => {
+          const saved = g.contributions.reduce((s, c) => s + c.amount, 0);
+          return [
+            g.name,
+            g.targetAmount,
+            saved,
+            Math.min(100, Math.round((saved / g.targetAmount) * 100)),
+            g.deadline || 'No especificada'
+          ];
+        })
+      });
+
+      wsSummary.columns.forEach(col => col.width = 22);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `Finanzas_Pro_Reporte_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      
+      setNotifications(prev => [
+        { id: generateId(), text: "Reporte Excel generado correctamente con éxito.", type: 'success', read: false },
+        ...prev
+      ]);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Error al generar el reporte.');
+    }
   };
 
   // Filtering
