@@ -1144,14 +1144,14 @@ function Dashboard() {
               className="flex items-center gap-2 bg-slate-900 dark:bg-blue-600 text-white px-6 py-3 rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-slate-900/10 active:scale-95 text-sm font-bold"
             >
               <PlusCircle size={18} />
-              Nuevo Movimiento
+              Nuevo ajuste monetario
             </button>
             <button 
               onClick={() => setShowGoalModal(true)}
               className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 text-sm font-bold"
             >
               <Target size={18} />
-              Nueva Meta
+              Nueva Meta de ahorro
             </button>
           </div>
 
