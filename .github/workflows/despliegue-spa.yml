@@ -29,13 +29,13 @@ jobs:
     - name: Desplegar en IIS Local (Windows)
       run: |
         # Forzar la creación de la carpeta si no existe
-        New-Item -ItemType Directory -Force -Path C:\Users\rojas\OneDrive\Desktop\finanzas-pro
+        New-Item -ItemType Directory -Force -Path C:\Users\rojas\OneDrive\Desktop\finanzas-pro\dist
         
         # Limpiar los archivos viejos
-        Remove-Item -Path "C:\Users\rojas\OneDrive\Desktop\finanzas-pro\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "C:\Users\rojas\OneDrive\Desktop\finanzas-pro\dist\*" -Recurse -Force -ErrorAction SilentlyContinue
         
         # Copiar la nueva compilación del SPA
-        Copy-Item -Path "dist\*" -Destination C:\Users\rojas\OneDrive\Desktop\finanzas-pro\ -Recurse -Force
+        Copy-Item -Path "dist\*" -Destination C:\Users\rojas\OneDrive\Desktop\finanzas-pro\dist -Recurse -Force
 
 
     - name: Desplegar en Firebase Hosting
