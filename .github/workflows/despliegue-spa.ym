@@ -1,0 +1,41 @@
+name: CD - Control Financiero (Firebase + IIS)
+
+on:
+  push:
+    branches: [ main ] # Se activa con cada push a main
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted # Ejecuta las tareas directamente en tu Windows local
+
+    steps:
+    - name: Descargar Código del Repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Instalar Dependencias
+      run: npm install
+
+    - name: Compilar SPA (Vite / React)
+      run: npm run build
+      env:
+        # Aquí puedes inyectar las variables de entorno de Firebase y Gemini si las usas en el build
+        VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }} 
+        VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    - name: Desplegar en IIS Local (Windows Server)
+      run: |
+        # 1. Limpiar la carpeta de producción en IIS
+        Remove-Item -Path "C:\inetpub\wwwroot\control-financiero\*" -Recurse -Force -ErrorAction SilentlyContinue
+        
+        # 2. Copiar los archivos estáticos compilados
+        Copy-Item -Path "dist\*" -Destination "C:\inetpub\wwwroot\control-financiero" -Recurse -Force
+
+    - name: Desplegar en Firebase Hosting
+      run: |
+        # Usamos las herramientas de Firebase CLI previamente instaladas de forma global
+        firebase deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}"
