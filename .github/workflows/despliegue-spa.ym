@@ -2,7 +2,7 @@ name: CD - Control Financiero (Firebase + IIS)
 
 on:
   push:
-    branches: [ main ] # Se activa con cada push a main
+    branches: [ main ]
 
 jobs:
   build-and-deploy:
@@ -23,7 +23,6 @@ jobs:
     - name: Compilar SPA (Vite / React)
       run: npm run build
       env:
-        # Aquí puedes inyectar las variables de entorno de Firebase y Gemini si las usas en el build
         VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }} 
         VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
