@@ -26,13 +26,17 @@ jobs:
         VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }} 
         VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-    - name: Desplegar en IIS Local (Windows Server)
+    - name: Desplegar en IIS Local (Windows)
       run: |
-        # 1. Limpiar la carpeta de producción en IIS
-        Remove-Item -Path "C:\inetpub\wwwroot\control-financiero\*" -Recurse -Force -ErrorAction SilentlyContinue
+        # Forzar la creación de la carpeta si no existe
+        New-Item -ItemType Directory -Force -Path C:\Users\rojas\OneDrive\Desktop\finanzas-pro
         
-        # 2. Copiar los archivos estáticos compilados
-        Copy-Item -Path "dist\*" -Destination "C:\inetpub\wwwroot\control-financiero" -Recurse -Force
+        # Limpiar los archivos viejos
+        Remove-Item -Path "C:\Users\rojas\OneDrive\Desktop\finanzas-pro\*" -Recurse -Force -ErrorAction SilentlyContinue
+        
+        # Copiar la nueva compilación del SPA
+        Copy-Item -Path "dist\*" -Destination C:\Users\rojas\OneDrive\Desktop\finanzas-pro\ -Recurse -Force
+
 
     - name: Desplegar en Firebase Hosting
       run: |
